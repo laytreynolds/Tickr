@@ -1,9 +1,11 @@
 package com.tickr.tickr.domain.event;
 
+import com.tickr.tickr.domain.reminder.ReminderService;
 import com.tickr.tickr.domain.user.User;
 import com.tickr.tickr.domain.user.UserRepository;
 import com.tickr.tickr.dto.CreateEventRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
@@ -12,12 +14,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EventService {
 
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
+    private final ReminderService reminderService;
 
     @Cacheable(value = "events", key = "#events")
     public List<Event> getEvents() {
@@ -51,7 +55,17 @@ public class EventService {
                 .source(Integer.parseInt(request.getSource()))
                 .build();
         
-        return eventRepository.save(event);
+        Event savedEvent = eventRepository.save(event);
+        
+        // Create reminders for the event after it's persisted
+        // If reminder creation fails, log the error but don't fail event creation
+        try {
+            reminderService.createRemindersForEvent(savedEvent, com.tickr.tickr.domain.reminder.Reminder.Channel.SMS);
+        } catch (Exception e) {
+            log.error("Failed to create reminders for event {}: {}", savedEvent.getId(), e.getMessage(), e);
+        }
+        
+        return savedEvent;
     }
     
     public void deleteEvent(UUID id) {

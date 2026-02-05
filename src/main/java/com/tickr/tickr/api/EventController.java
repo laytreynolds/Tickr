@@ -23,12 +23,6 @@ public class EventController {
 
     private final EventService eventService;
 
-    @GetMapping("/ping")
-    public ResponseEntity<String> ping() {
-        return ResponseEntity.ok("pong");
-    }
-    
-
     @GetMapping("/getevents")
     public ResponseEntity<List<Event>> getEvents() {
         List<Event> events = this.eventService.getEvents();
