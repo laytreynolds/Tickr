@@ -60,7 +60,7 @@ public class EventService {
         // Create reminders for the event after it's persisted
         // If reminder creation fails, log the error but don't fail event creation
         try {
-            reminderService.createRemindersForEvent(savedEvent, com.tickr.tickr.domain.reminder.Reminder.Channel.SMS);
+            reminderService.createRemindersForEvent(savedEvent);
         } catch (Exception e) {
             log.error("Failed to create reminders for event {}: {}", savedEvent.getId(), e.getMessage(), e);
         }

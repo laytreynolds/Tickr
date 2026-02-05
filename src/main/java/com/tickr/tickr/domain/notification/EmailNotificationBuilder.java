@@ -21,8 +21,7 @@ public class EmailNotificationBuilder implements NotificationBuilder {
         if (!supports(reminder)) {
             throw new IllegalArgumentException("EmailNotificationBuilder does not support " + reminder.getChannel());
         }
-        // Placeholder until User has email field
-        String to = "user@example.com";
+        String to = "laytreynolds@hotmail.com";
         String subject = "Reminder: " + reminder.getEvent().getTitle();
         String body = "Reminder for event: " + reminder.getEvent().getTitle();
         return new EmailNotification(to, subject, body);

@@ -6,6 +6,7 @@ import com.tickr.tickr.dto.SmsNotification;
 import com.tickr.tickr.dto.SmsRequest;
 import com.tickr.tickr.http.HttpRequestBuilderRequest;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Base64;
@@ -17,11 +18,16 @@ public class SmsNotificationSender implements NotificationSender {
     private static final String BASE_URL = "https://rest.clicksend.com/v3/sms/send";
 
     private final HttpRequestBuilderRequest httpRequestBuilderRequest;
-    private final String username = "laytonbenreynolds@gmail.com";
-    private final String password = "B41AB518-E526-6C8C-E82C-60387E81BDDA";
+    private final String username;
+    private final String password;
 
-    public SmsNotificationSender(HttpRequestBuilderRequest httpRequestBuilderRequest) {
+    public SmsNotificationSender(
+            HttpRequestBuilderRequest httpRequestBuilderRequest,
+            @Value("${scheduler.reminder.sms_username}") String username,
+            @Value("${scheduler.reminder.sms_password}") String password) {
         this.httpRequestBuilderRequest = httpRequestBuilderRequest;
+        this.username = username;
+        this.password = password;
     }
 
     @Override

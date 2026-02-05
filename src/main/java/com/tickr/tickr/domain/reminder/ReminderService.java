@@ -40,7 +40,6 @@ public class ReminderService {
     @Transactional
     public void sendDueReminders() {
         List<Reminder> reminders = reminderRepository.findDueReminders(Instant.now());        
-        log.info("Found {} due reminder(s) to send", reminders.size());
         int successCount = 0;
         int failureCount = 0;
         for (Reminder reminder : reminders) {
@@ -62,14 +61,14 @@ public class ReminderService {
     }
 
     @Transactional
-    public void createRemindersForEvent(Event event, Reminder.Channel defaultChannel) {
+    public void createRemindersForEvent(Event event) {
         try {
             Instant now = Instant.now();
             Instant eventStartTime = event.getStartTime();
 
             // Don't create reminders for past events
             if (eventStartTime.isBefore(now)) {
-                log.debug("Skipping reminder creation for past event: {}", event.getId());
+                log.warn("Skipping reminder creation for past event: {}", event.getId());
                 return;
             }
 
@@ -78,7 +77,7 @@ public class ReminderService {
 
             // If no valid reminders, return early
             if (reminderTimestamps.isEmpty()) {
-                log.debug("No valid reminder timestamps calculated for event: {}", event.getId());
+                log.warn("No valid reminder timestamps calculated for event: {}", event.getId());
                 return;
             }
 
@@ -98,7 +97,7 @@ public class ReminderService {
                             .user(user)
                             .remindAt(remindAt)
                             .status(Reminder.Status.PENDING)
-                            .channel(defaultChannel)
+                            .channel(Reminder.Channel.EMAIL)
                             .build();
                     reminders.add(reminder);
                 }

@@ -4,13 +4,22 @@ import com.tickr.tickr.domain.notification.Notification;
 import com.tickr.tickr.domain.reminder.Reminder;
 import com.tickr.tickr.dto.EmailNotification;
 
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 
 /**
- * Sends email notifications. Stub implementation for the EMAIL channel.
+ * Sends email notifications via JavaMail (SMTP). Configure in application.yml
+ * under spring.mail (host, port, username, password).
  */
 @Component
 public class EmailNotificationSender implements NotificationSender {
+
+    private final JavaMailSender mailSender;
+
+    public EmailNotificationSender(JavaMailSender mailSender) {
+        this.mailSender = mailSender;
+    }
 
     @Override
     public boolean supports(Notification notification) {
@@ -23,7 +32,10 @@ public class EmailNotificationSender implements NotificationSender {
             throw new IllegalArgumentException("EmailNotificationSender does not support " + notification.getChannel());
         }
         EmailNotification email = (EmailNotification) notification;
-        // TODO: integrate with email provider (e.g. SendGrid, SES)
-        // For now, no-op or log
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(email.getTo());
+        message.setSubject(email.getSubject());
+        message.setText(email.getBody());
+        mailSender.send(message);
     }
 }
