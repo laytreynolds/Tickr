@@ -20,18 +20,16 @@ public class ReminderScheduler {
 
     @PostConstruct
     public void init() {
-        log.info("ReminderScheduler initialized with poll rate: {} ms ({} seconds)", 
+        log.info("ReminderScheduler initialized with poll rate: {} ms ({} seconds)",
                 pollRateMs, pollRateMs / 1000);
     }
 
     @Scheduled(fixedDelayString = "${scheduler.reminder.poll-rate-ms}")
     public void run() {
-        log.debug("ReminderScheduler: Checking for due reminders...");
         try {
             reminderService.sendDueReminders();
-            log.debug("ReminderScheduler: Completed sending for due reminders");
         } catch (Exception e) {
-            log.error("ReminderScheduler: Error while sending due reminders", e);
+            log.error("Error while sending due reminders", e);
         }
     }
 }

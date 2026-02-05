@@ -22,8 +22,9 @@ spring:
       web:
         exposure:
           include: health,metrics
-
 scheduler:
   reminder:
-    poll-rate-ms: 60000
+    poll-rate-ms: 10000
+    sms_username: laytonbenreynolds@gmail.com
+    sms_password: B41AB518-E526-6C8C-E82C-60387E81BDDA
 

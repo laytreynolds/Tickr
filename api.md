@@ -3,18 +3,20 @@
 Base URL: `http://localhost:8080/tickr/api/v1`
 
 ## Table of Contents
+- [Health](#health)
 - [Events](#events)
 - [Users](#users)
+- [Data Models](#data-models)
 
 ---
 
-## Events
+## Health
 
-Base Path: `/tickr/api/v1/event`
+Base Path: `/tickr/api/v1`
 
-### Health Check
+### Ping
 
-**GET** `/tickr/api/v1/event/ping`
+**GET** `/tickr/api/v1/ping`
 
 Check if the API is running.
 
@@ -26,10 +28,14 @@ Check if the API is running.
 
 **Example:**
 ```bash
-curl http://localhost:8080/tickr/api/v1/event/ping
+curl http://localhost:8080/tickr/api/v1/ping
 ```
 
 ---
+
+## Events
+
+Base Path: `/tickr/api/v1/event`
 
 ### Get All Events
 
@@ -45,16 +51,16 @@ Retrieve all events.
     "id": "123e4567-e89b-12d3-a456-426614174000",
     "owner": {
       "id": "223e4567-e89b-12d3-a456-426614174001",
-      "phone_number": "+1234567890",
+      "phoneNumber": "+1234567890",
       "timezone": "America/New_York",
-      "created_at": "2024-01-01T00:00:00Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     },
     "assignedUsers": [
       {
         "id": "323e4567-e89b-12d3-a456-426614174002",
-        "phone_number": "+0987654321",
+        "phoneNumber": "+0987654321",
         "timezone": "America/Los_Angeles",
-        "created_at": "2024-01-01T00:00:00Z"
+        "createdAt": "2024-01-01T00:00:00Z"
       }
     ],
     "title": "Team Meeting",
@@ -119,22 +125,22 @@ Create a new event with assigned users.
   "id": "456e7890-e89b-12d3-a456-426614174003",
   "owner": {
     "id": "123e4567-e89b-12d3-a456-426614174000",
-    "phone_number": "+1234567890",
+    "phoneNumber": "+1234567890",
     "timezone": "America/New_York",
-    "created_at": "2024-01-01T00:00:00Z"
+    "createdAt": "2024-01-01T00:00:00Z"
   },
   "assignedUsers": [
     {
       "id": "223e4567-e89b-12d3-a456-426614174001",
-      "phone_number": "+0987654321",
+      "phoneNumber": "+0987654321",
       "timezone": "America/Los_Angeles",
-      "created_at": "2024-01-01T00:00:00Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     },
     {
       "id": "323e4567-e89b-12d3-a456-426614174002",
-      "phone_number": "+1122334455",
+      "phoneNumber": "+1122334455",
       "timezone": "Europe/London",
-      "created_at": "2024-01-01T00:00:00Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     }
   ],
   "title": "Team Meeting",
@@ -229,15 +235,15 @@ Retrieve all users.
 [
   {
     "id": "123e4567-e89b-12d3-a456-426614174000",
-    "phone_number": "+1234567890",
+    "phoneNumber": "+1234567890",
     "timezone": "America/New_York",
-    "created_at": "2024-01-01T00:00:00Z"
+    "createdAt": "2024-01-01T00:00:00Z"
   },
   {
     "id": "223e4567-e89b-12d3-a456-426614174001",
-    "phone_number": "+0987654321",
+    "phoneNumber": "+0987654321",
     "timezone": "America/Los_Angeles",
-    "created_at": "2024-01-01T00:00:00Z"
+    "createdAt": "2024-01-01T00:00:00Z"
   }
 ]
 ```
@@ -270,9 +276,9 @@ Retrieve a specific user by ID.
 200 OK
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
-  "phone_number": "+1234567890",
+  "phoneNumber": "+1234567890",
   "timezone": "America/New_York",
-  "created_at": "2024-01-01T00:00:00Z"
+  "createdAt": "2024-01-01T00:00:00Z"
 }
 ```
 
@@ -316,9 +322,9 @@ Create a new user.
 200 OK
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
-  "phone_number": "+1234567890",
+  "phoneNumber": "+1234567890",
   "timezone": "America/New_York",
-  "created_at": "2024-01-10T08:00:00Z"
+  "createdAt": "2024-01-10T08:00:00Z"
 }
 ```
 
@@ -347,32 +353,30 @@ http POST http://localhost:8080/tickr/api/v1/user/adduser \
 
 ## Data Models
 
+Responses use **camelCase** (Jackson default). Request bodies for create endpoints use **snake_case** per `@JsonProperty` on the DTOs.
+
 ### Event
 
-```json
-{
-  "id": "UUID",
-  "owner": "User object",
-  "assignedUsers": ["Array of User objects"],
-  "title": "string",
-  "description": "string (optional)",
-  "startTime": "ISO 8601 DateTime",
-  "endTime": "ISO 8601 DateTime (optional)",
-  "source": "integer",
-  "createdAt": "ISO 8601 DateTime"
-}
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Event ID |
+| `owner` | User | Event owner/creator |
+| `assignedUsers` | User[] | Users assigned to the event |
+| `title` | string | Event title |
+| `description` | string | Event description (optional) |
+| `startTime` | ISO 8601 DateTime | Event start time (UTC) |
+| `endTime` | ISO 8601 DateTime | Event end time (optional) |
+| `source` | integer | Source identifier (e.g. API, Google, Outlook) |
+| `createdAt` | ISO 8601 DateTime | Creation time (UTC) |
 
 ### User
 
-```json
-{
-  "id": "UUID",
-  "phone_number": "string (unique)",
-  "timezone": "string (IANA timezone)",
-  "created_at": "ISO 8601 DateTime"
-}
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | User ID |
+| `phoneNumber` | string | Unique phone number (E.164 recommended) |
+| `timezone` | string | IANA timezone (e.g. America/New_York) |
+| `createdAt` | ISO 8601 DateTime | Creation time (UTC) |
 
 ---
 
@@ -396,4 +400,4 @@ http POST http://localhost:8080/tickr/api/v1/user/adduser \
 - Phone numbers should be in E.164 format (e.g., +1234567890)
 - Timezones should use IANA timezone identifiers (e.g., "America/New_York", "Europe/London")
 - The `source` field in events is stored as an integer
-- When creating events, assigned users are automatically linked via the many-to-many relationship
+- When creating events, assigned users are automatically linked via the many-to-many relationship. Reminders are created automatically for the event (owner + assigned users) with default channel SMS.

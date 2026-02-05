@@ -1,14 +1,14 @@
 package com.tickr.tickr.domain.reminder;
 
 import com.tickr.tickr.domain.event.Event;
+import com.tickr.tickr.domain.notification.Notification;
+import com.tickr.tickr.domain.notification.NotificationService;
 import com.tickr.tickr.domain.user.User;
-import com.tickr.tickr.dto.NotificationMessage;
-import com.tickr.tickr.notification.NotificationSender;
+import com.tickr.tickr.notification.NotificationDispatcher;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -25,33 +26,27 @@ import java.util.Set;
 public class ReminderService {
 
     private final ReminderRepository reminderRepository;
-    private final @Qualifier("smsNotificationSender") NotificationSender notificationSender;
-    
-    @Value("${scheduler.reminder.sms_username}")
-    private String smsUsername;
-    
-    @Value("${scheduler.reminder.sms_password}")
-    private String smsPassword;
+    private final NotificationService notificationService;
+    private final NotificationDispatcher notificationDispatcher;
+
+    public List<Reminder> getReminders() {
+        return reminderRepository.findAll();
+    }
+
+    public void deleteReminder(UUID id) {
+        reminderRepository.deleteById(id);
+    }
 
     @Transactional
     public void sendDueReminders() {
-        List<Reminder> reminders =
-                reminderRepository.findDueReminders(Instant.now());
-
-        if (reminders.isEmpty()) {
-            log.debug("No due reminders found");
-            return;
-        }
-
+        List<Reminder> reminders = reminderRepository.findDueReminders(Instant.now());        
         log.info("Found {} due reminder(s) to send", reminders.size());
-
         int successCount = 0;
         int failureCount = 0;
         for (Reminder reminder : reminders) {
             try {
-                notificationSender.send(
-                        NotificationMessage.from(reminder, smsUsername, smsPassword)
-                );
+                Notification notification = notificationService.create(reminder);
+                notificationDispatcher.send(notification);
                 reminder.markSent();
                 successCount++;
                 log.debug("Reminder send successful for id: {}", reminder.getId());
@@ -62,7 +57,7 @@ public class ReminderService {
             }
         }
 
-        log.info("Processed {} reminder(s): {} successful, {} failed", 
+        log.info("Processed {} reminder(s): {} successful, {} failed",
                 reminders.size(), successCount, failureCount);
     }
 
@@ -112,7 +107,7 @@ public class ReminderService {
             // Batch save all reminders
             if (!reminders.isEmpty()) {
                 reminderRepository.saveAll(reminders);
-                log.info("Successfully created {} reminders for event {} ({} users, {} timestamps)", 
+                log.info("Successfully created {} reminders for event {} ({} users, {} timestamps)",
                         reminders.size(), event.getTitle(), usersToNotify.size(), reminderTimestamps.size());
             }
         } catch (Exception e) {
@@ -150,10 +145,10 @@ public class ReminderService {
             timestamps.add(eventStartTime.minus(Duration.ofHours(4)));
         }
 
-        // Filter out any timestamps that are in the past (shouldn't happen, but safety check)
+        // Filter out any timestamps that are in the past (shouldn't happen, but safety
+        // check)
         timestamps.removeIf(timestamp -> timestamp.isBefore(now));
 
         return timestamps;
     }
 }
-

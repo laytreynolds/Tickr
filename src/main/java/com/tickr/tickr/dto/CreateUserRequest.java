@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 public class CreateUserRequest {
-    @JsonProperty("phone_number")
+    @JsonProperty("phoneNumber")
     private String phoneNumber;
     
     private String timezone;
