@@ -1,6 +1,7 @@
 package com.tickr.tickr.domain.user;
 
 import com.tickr.tickr.domain.event.Event;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -28,6 +29,10 @@ public class User {
 
     @Column(nullable = false)
     private String timezone;
+
+    @JsonIgnore
+    @Column(nullable = false, name = "password_hash")
+    private String passwordHash;
 
     @ManyToMany(mappedBy = "assignedUsers")
     @Builder.Default

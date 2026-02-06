@@ -10,4 +10,6 @@ public class CreateUserRequest {
     private String phoneNumber;
     
     private String timezone;
+
+    private String password;
 }
