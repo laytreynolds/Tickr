@@ -35,6 +35,7 @@ public class User {
     private String passwordHash;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
     @Builder.Default
     private Set<EventUser> assignedEvents = new HashSet<>(); // Events this user is assigned to
 

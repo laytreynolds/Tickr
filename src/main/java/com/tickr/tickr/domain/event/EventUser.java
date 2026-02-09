@@ -1,6 +1,7 @@
 package com.tickr.tickr.domain.event;
 
 import com.tickr.tickr.domain.user.User;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,12 +27,14 @@ public class EventUser {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @MapsId("eventId")
     @JoinColumn(name = "event_id", nullable = false)
+    @JsonIgnore
     private Event event;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @MapsId("userId")
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
 
     @Embeddable
     @Getter
@@ -42,4 +45,5 @@ public class EventUser {
         private UUID eventId;
         private UUID userId;
     }
+
 }

@@ -2,13 +2,13 @@ package com.tickr.tickr.api;
 
 import com.tickr.tickr.domain.event.EventService;
 import com.tickr.tickr.dto.CreateEventRequest;
+import com.tickr.tickr.dto.EventResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
-import com.tickr.tickr.domain.event.Event;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,8 +24,10 @@ public class EventController {
     private final EventService eventService;
 
     @GetMapping("/getevents")
-    public ResponseEntity<List<Event>> getEvents() {
-        List<Event> events = this.eventService.getEvents();
+    public ResponseEntity<List<EventResponse>> getEvents() {
+        List<EventResponse> events = this.eventService.getEvents().stream()
+                .map(eventService::toResponse)
+                .toList();
         return ResponseEntity.ok(events);
     }
 
@@ -36,8 +38,8 @@ public class EventController {
     }
 
     @PostMapping("/addevent")
-    public ResponseEntity<Event> addEvent(@RequestBody CreateEventRequest request) {
-        Event createdEvent = eventService.createEvent(request);
+    public ResponseEntity<EventResponse> addEvent(@RequestBody CreateEventRequest request) {
+        EventResponse createdEvent = eventService.toResponse(eventService.createEvent(request));
         return ResponseEntity.ok(createdEvent);
     }
 }

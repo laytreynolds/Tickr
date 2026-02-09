@@ -4,6 +4,7 @@ import com.tickr.tickr.domain.reminder.ReminderService;
 import com.tickr.tickr.domain.user.User;
 import com.tickr.tickr.domain.user.UserRepository;
 import com.tickr.tickr.dto.CreateEventRequest;
+import com.tickr.tickr.dto.EventResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -13,6 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -80,5 +82,25 @@ public class EventService {
 
     public void deleteEvent(UUID id) {
         this.eventRepository.deleteById(id);
+    }
+
+    public EventResponse toResponse(Event event) {
+        List<UUID> assignedUserIds = event.getAssignedUsers().stream()
+                .map(EventUser::getUser)
+                .map(User::getId)
+                .collect(Collectors.toList());
+
+        return new EventResponse(
+                event.getId(),
+                event.getOwner().getId(),
+                assignedUserIds,
+                event.getTitle(),
+                event.getDescription(),
+                event.getStartTime(),
+                event.getEndTime(),
+                event.getTimezone(),
+                event.getSource(),
+                event.getCreatedAt()
+        );
     }
 }
