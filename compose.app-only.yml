@@ -1,0 +1,13 @@
+# Use this when a shared nginx in /opt handles TLS and routing.
+# Run:  docker compose -f compose.yml -f compose.app-only.yml up -d
+# The app is reachable on the shared network as tickr_app:8080.
+
+services:
+  app:
+    networks:
+      - tickr-backend
+      - proxy_network
+
+networks:
+  proxy_network:
+    external: true
