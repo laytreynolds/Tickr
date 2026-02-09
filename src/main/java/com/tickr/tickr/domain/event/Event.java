@@ -61,4 +61,5 @@ public class Event {
     public void setOwner(User owner) {
         this.owner = owner;
     }
+
 }
