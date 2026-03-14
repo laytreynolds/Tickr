@@ -103,5 +103,3 @@ ADD CONSTRAINT reminders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.us
 --
 -- PostgreSQL database dump complete
 --
-
-\unrestrict GRbl77agKVNGu0d1Iuch6n0jq9yQgu1h2Q44PhnLOB9PhY9O5HB9tFrg6pOVEQl
