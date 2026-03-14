@@ -16,7 +16,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/Tickr
+            cd /opt/Tickr/backend
             git fetch origin main
             git reset --hard origin/main
             docker compose -f compose.yml up -d --build --remove-orphans
