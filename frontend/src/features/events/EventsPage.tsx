@@ -1,0 +1,652 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CreateEventRequest, Event, User } from './types'
+import { useCreateEvent, useEvents, useUsers } from './api'
+
+const TITLE_MAX_LENGTH = 500
+const DESCRIPTION_MAX_LENGTH = 2000
+
+const COMMON_TIMEZONES = [
+  'UTC',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'Europe/London',
+  'Europe/Paris',
+  'Europe/Berlin',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+]
+
+function getTimeZoneOptions(): string[] {
+  if (typeof Intl !== 'undefined' && 'supportedValuesOf' in Intl) {
+    try {
+      return (Intl as Intl.IntlStatic & { supportedValuesOf?(key: string): string[] })
+        .supportedValuesOf('timeZone') as string[]
+    } catch {
+      // fallback
+    }
+  }
+  const resolved = Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone
+  const list = [...COMMON_TIMEZONES]
+  if (resolved && !list.includes(resolved)) {
+    list.unshift(resolved)
+  }
+  return list
+}
+
+/** Convert local date + time in a given IANA timezone to ISO 8601 UTC string. */
+function localInZoneToISO(
+  dateStr: string,
+  timeStr: string,
+  timeZone: string,
+): string {
+  const [y, mo, d] = dateStr.split('-').map(Number)
+  const [h, min] = timeStr.split(':').map(Number)
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+  const base = new Date(Date.UTC(y, mo - 1, d, 0, 0, 0, 0))
+  for (let u = 0; u < 48; u++) {
+    const cand = new Date(base.getTime() + u * 30 * 60 * 1000)
+    const parts = formatter.formatToParts(cand)
+    const get = (type: string) =>
+      parts.find((p) => p.type === type)?.value ?? ''
+    const fy = Number(get('year'))
+    const fm = Number(get('month'))
+    const fd = Number(get('day'))
+    const fh = Number(get('hour'))
+    const fmin = Number(get('minute'))
+    if (fy === y && fm === mo && fd === d && fh === h && fmin === min) {
+      return cand.toISOString()
+    }
+  }
+  const nextDay = new Date(base.getTime() + 24 * 60 * 60 * 1000)
+  for (let u = 0; u < 48; u++) {
+    const cand = new Date(nextDay.getTime() + u * 30 * 60 * 1000)
+    const parts = formatter.formatToParts(cand)
+    const get = (type: string) =>
+      parts.find((p) => p.type === type)?.value ?? ''
+    const fy = Number(get('year'))
+    const fm = Number(get('month'))
+    const fd = Number(get('day'))
+    const fh = Number(get('hour'))
+    const fmin = Number(get('minute'))
+    if (fy === y && fm === mo && fd === d && fh === h && fmin === min) {
+      return cand.toISOString()
+    }
+  }
+  return new Date(Date.UTC(y, mo - 1, d, h, min ?? 0, 0, 0)).toISOString()
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Invalid date'
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function descriptionSnippet(description: string | null | undefined, maxLen: number): string {
+  if (description == null || description === '') return '—'
+  const trimmed = description.trim()
+  if (trimmed.length <= maxLen) return trimmed
+  return trimmed.slice(0, maxLen) + '…'
+}
+
+interface FormState {
+  title: string
+  description: string
+  startDate: string
+  startTime: string
+  endDate: string
+  endTime: string
+  timezone: string
+  ownerId: string
+  assignedUserIds: string[]
+  source: string
+}
+
+const defaultFormState: FormState = {
+  title: '',
+  description: '',
+  startDate: '',
+  startTime: '09:00',
+  endDate: '',
+  endTime: '',
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
+  ownerId: '',
+  assignedUserIds: [],
+  source: '0',
+}
+
+export function EventsPage() {
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [formState, setFormState] = useState<FormState>(defaultFormState)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
+
+  const eventsQuery = useEvents()
+  const usersQuery = useUsers()
+  const createEvent = useCreateEvent()
+  const timeZoneOptions = getTimeZoneOptions()
+
+  useEffect(() => {
+    if (showAddModal) {
+      setFormState((prev) => ({
+        ...prev,
+        timezone: prev.timezone || (Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC'),
+      }))
+      cancelButtonRef.current?.focus()
+    }
+  }, [showAddModal])
+
+  useEffect(() => {
+    if (!showAddModal) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowAddModal(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [showAddModal])
+
+  const openAddModal = useCallback(() => {
+    setFormState({ ...defaultFormState, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC' })
+    setSubmitError(null)
+    setSuccessMessage(null)
+    setShowAddModal(true)
+  }, [])
+
+  const closeAddModal = useCallback(() => {
+    setShowAddModal(false)
+    setSubmitError(null)
+  }, [])
+
+  const userById = useCallback(
+    (id: string): User | undefined => usersQuery.data?.find((u) => u.id === id),
+    [usersQuery.data],
+  )
+
+  const validateAndBuildRequest = useCallback((): CreateEventRequest | string => {
+    const title = formState.title.trim()
+    if (title.length === 0) return 'Title is required.'
+    if (title.length > TITLE_MAX_LENGTH) return `Title must be at most ${TITLE_MAX_LENGTH} characters.`
+
+    const description = formState.description.trim()
+    if (description.length > DESCRIPTION_MAX_LENGTH) return `Description must be at most ${DESCRIPTION_MAX_LENGTH} characters.`
+
+    if (!formState.startDate || !formState.startTime) return 'Start date and time are required.'
+    const startTimeISO = localInZoneToISO(
+      formState.startDate,
+      formState.startTime,
+      formState.timezone,
+    )
+
+    let endTimeISO: string | undefined
+    if (formState.endDate && formState.endTime) {
+      endTimeISO = localInZoneToISO(
+        formState.endDate,
+        formState.endTime,
+        formState.timezone,
+      )
+      if (endTimeISO < startTimeISO) return 'End time must be after start time.'
+    } else if (formState.endDate || formState.endTime) {
+      return 'Both end date and end time must be set, or leave both empty.'
+    }
+
+    if (!formState.ownerId) return 'Owner is required.'
+
+    const owner = userById(formState.ownerId)
+    if (!owner) return 'Selected owner is not valid.'
+
+    const payload: CreateEventRequest = {
+      owner_id: formState.ownerId,
+      assigned_user_ids: formState.assignedUserIds.filter((id) => id !== formState.ownerId),
+      title,
+      start_time: startTimeISO,
+      source: formState.source.trim() || '0',
+      timezone: formState.timezone,
+    }
+    if (description.length > 0) payload.description = description
+    if (endTimeISO) payload.end_time = endTimeISO
+
+    return payload
+  }, [formState, userById])
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault()
+      setSubmitError(null)
+      const result = validateAndBuildRequest()
+      if (typeof result === 'string') {
+        setSubmitError(result)
+        return
+      }
+      createEvent.mutate(result, {
+        onSuccess: () => {
+          setSuccessMessage('Event created.')
+          closeAddModal()
+        },
+        onError: (err: Error & { response?: { data?: unknown } }) => {
+          const message =
+            err.response?.data != null && typeof (err.response.data as { message?: string }).message === 'string'
+              ? (err.response.data as { message: string }).message
+              : err.message ?? 'Failed to create event.'
+          setSubmitError(message)
+        },
+      })
+    },
+    [validateAndBuildRequest, createEvent, closeAddModal],
+  )
+
+  const showEmptyState =
+    !eventsQuery.isLoading &&
+    !eventsQuery.isError &&
+    eventsQuery.data &&
+    eventsQuery.data.length === 0
+
+  return (
+    <div className="flex flex-1 flex-col gap-6">
+      <header className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Events
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Create and view events. Times are shown in each event&apos;s timezone.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => eventsQuery.refetch()}
+            className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tickr-500 focus-visible:ring-offset-2"
+            disabled={eventsQuery.isFetching}
+          >
+            {eventsQuery.isFetching ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                Refreshing…
+              </span>
+            ) : (
+              'Refresh'
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="inline-flex items-center justify-center rounded-lg border border-tickr-500 bg-tickr-500 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-tickr-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tickr-500 focus-visible:ring-offset-2"
+          >
+            Add event
+          </button>
+        </div>
+      </header>
+
+      {successMessage && (
+        <div
+          role="status"
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+        >
+          {successMessage}
+        </div>
+      )}
+
+      <section className="flex-1 rounded-xl border border-slate-200 bg-white shadow-sm">
+        {eventsQuery.isLoading ? (
+          <div className="flex h-64 items-center justify-center">
+            <div className="flex flex-col items-center gap-2 text-slate-500">
+              <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-tickr-500" />
+              <span className="text-sm">Loading events…</span>
+            </div>
+          </div>
+        ) : eventsQuery.isError ? (
+          <div className="flex h-64 flex-col items-center justify-center gap-2 text-center">
+            <p className="text-sm font-medium text-red-600">
+              Failed to load events
+            </p>
+            <p className="max-w-md text-xs text-slate-500">
+              Please ensure the Tickr backend is running and try again.
+            </p>
+          </div>
+        ) : showEmptyState ? (
+          <div className="flex h-64 flex-col items-center justify-center gap-2 text-center">
+            <p className="text-sm font-medium text-slate-900">No events yet</p>
+            <p className="max-w-md text-xs text-slate-500">
+              Click &quot;Add event&quot; to create your first event.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-xl">
+            <div className="hidden md:block">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Title
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Description
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Start
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      End
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Timezone
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Owner
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {(eventsQuery.data ?? []).map((event) => (
+                    <tr key={event.id} className="hover:bg-slate-50/60">
+                      <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                        {event.title}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 max-w-[200px] truncate">
+                        {descriptionSnippet(event.description, 60)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-900">
+                        {formatDateTime(event.startTime)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-900">
+                        {event.endTime ? formatDateTime(event.endTime) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {event.timezone}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {userById(event.ownerId)?.phoneNumber ?? event.ownerId ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid gap-3 p-3 md:hidden">
+              {(eventsQuery.data ?? []).map((event) => (
+                <article
+                  key={event.id}
+                  className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                >
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    {event.title}
+                  </h2>
+                  <p className="text-xs text-slate-600 line-clamp-2">
+                    {descriptionSnippet(event.description, 80)}
+                  </p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                    <span>Start: {formatDateTime(event.startTime)}</span>
+                    {event.endTime && (
+                      <span>End: {formatDateTime(event.endTime)}</span>
+                    )}
+                    <span>{event.timezone}</span>
+                    <span>
+                      Owner: {userById(event.ownerId)?.phoneNumber ?? event.ownerId ?? '—'}
+                    </span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {showAddModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-event-dialog-title"
+          aria-describedby="add-event-dialog-desc"
+        >
+          <div
+            className="absolute inset-0 bg-slate-900/50"
+            aria-hidden="true"
+            onClick={closeAddModal}
+          />
+          <div className="relative z-10 w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl max-h-[90vh] overflow-y-auto">
+            <h2
+              id="add-event-dialog-title"
+              className="text-lg font-semibold text-slate-900"
+            >
+              Add event
+            </h2>
+            <p id="add-event-dialog-desc" className="mt-1 text-sm text-slate-500">
+              Fill in the required fields. Times are interpreted in the selected timezone.
+            </p>
+
+            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+              {submitError && (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+                >
+                  {submitError}
+                </p>
+              )}
+
+              <div>
+                <label htmlFor="event-title" className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Title (required)
+                </label>
+                <input
+                  id="event-title"
+                  type="text"
+                  required
+                  maxLength={TITLE_MAX_LENGTH}
+                  value={formState.title}
+                  onChange={(e) =>
+                    setFormState((prev) => ({ ...prev, title: e.target.value }))
+                  }
+                  className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-tickr-500 focus:ring-2 focus:ring-tickr-200"
+                  placeholder="Event title"
+                  autoComplete="off"
+                />
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {formState.title.length} / {TITLE_MAX_LENGTH}
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="event-description" className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Description (optional)
+                </label>
+                <textarea
+                  id="event-description"
+                  rows={3}
+                  maxLength={DESCRIPTION_MAX_LENGTH}
+                  value={formState.description}
+                  onChange={(e) =>
+                    setFormState((prev) => ({ ...prev, description: e.target.value }))
+                  }
+                  className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-tickr-500 focus:ring-2 focus:ring-tickr-200"
+                  placeholder="Optional description"
+                />
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {formState.description.length} / {DESCRIPTION_MAX_LENGTH}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="event-start-date" className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Start date (required)
+                  </label>
+                  <input
+                    id="event-start-date"
+                    type="date"
+                    required
+                    value={formState.startDate}
+                    onChange={(e) =>
+                      setFormState((prev) => ({ ...prev, startDate: e.target.value }))
+                    }
+                    className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-tickr-500 focus:ring-2 focus:ring-tickr-200"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="event-start-time" className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Start time (required)
+                  </label>
+                  <input
+                    id="event-start-time"
+                    type="time"
+                    required
+                    value={formState.startTime}
+                    onChange={(e) =>
+                      setFormState((prev) => ({ ...prev, startTime: e.target.value }))
+                    }
+                    className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-tickr-500 focus:ring-2 focus:ring-tickr-200"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="event-end-date" className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                    End date (optional)
+                  </label>
+                  <input
+                    id="event-end-date"
+                    type="date"
+                    value={formState.endDate}
+                    onChange={(e) =>
+                      setFormState((prev) => ({ ...prev, endDate: e.target.value }))
+                    }
+                    className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-tickr-500 focus:ring-2 focus:ring-tickr-200"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="event-end-time" className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                    End time (optional)
+                  </label>
+                  <input
+                    id="event-end-time"
+                    type="time"
+                    value={formState.endTime}
+                    onChange={(e) =>
+                      setFormState((prev) => ({ ...prev, endTime: e.target.value }))
+                    }
+                    className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-tickr-500 focus:ring-2 focus:ring-tickr-200"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="event-timezone" className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Timezone (required)
+                </label>
+                <select
+                  id="event-timezone"
+                  required
+                  value={formState.timezone}
+                  onChange={(e) =>
+                    setFormState((prev) => ({ ...prev, timezone: e.target.value }))
+                  }
+                  className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-tickr-500 focus:ring-2 focus:ring-tickr-200"
+                >
+                  {timeZoneOptions.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="event-owner" className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Owner (required)
+                </label>
+                <select
+                  id="event-owner"
+                  required
+                  value={formState.ownerId}
+                  onChange={(e) =>
+                    setFormState((prev) => ({ ...prev, ownerId: e.target.value }))
+                  }
+                  className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-tickr-500 focus:ring-2 focus:ring-tickr-200"
+                >
+                  <option value="">Select owner</option>
+                  {(usersQuery.data ?? []).map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.phoneNumber ?? user.id}
+                    </option>
+                  ))}
+                </select>
+                {usersQuery.isLoading && (
+                  <p className="mt-0.5 text-xs text-slate-500">Loading users…</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="event-assigned" className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Assigned users (optional)
+                </label>
+                <select
+                  id="event-assigned"
+                  multiple
+                  size={4}
+                  value={formState.assignedUserIds}
+                  onChange={(e) => {
+                    const selected = Array.from(
+                      e.target.selectedOptions,
+                      (opt) => opt.value,
+                    )
+                    setFormState((prev) => ({ ...prev, assignedUserIds: selected }))
+                  }}
+                  className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-tickr-500 focus:ring-2 focus:ring-tickr-200"
+                >
+                  {(usersQuery.data ?? []).map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.phoneNumber ?? user.id}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Hold Ctrl/Cmd to select multiple.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  ref={cancelButtonRef}
+                  onClick={closeAddModal}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tickr-500 focus-visible:ring-offset-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createEvent.isPending}
+                  className="rounded-lg border border-tickr-500 bg-tickr-500 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-tickr-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tickr-500 focus-visible:ring-offset-2 disabled:opacity-70"
+                >
+                  {createEvent.isPending ? 'Creating…' : 'Create event'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
