@@ -44,7 +44,6 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/tickr/api/v1/ping",
                                 "/tickr/api/v1/auth/**",
-                                "/tickr/api/v1/user/adduser",
                                 "/actuator/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",

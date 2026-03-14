@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useState } from 'react'
 import { apiClient, setAuthToken } from '../../lib/apiClient'
 import logo from '../../assets/logo.png'
 
@@ -10,23 +10,16 @@ interface AuthResponse {
 
 interface LoginPageProps {
   onLoginSuccess: (auth: AuthResponse) => void
-  notice?: string | null
-  onNavigateToRegister?: () => void
 }
 
 type HealthStatus = 'idle' | 'checking' | 'ok' | 'error'
 
-export function LoginPage({ onLoginSuccess, notice, onNavigateToRegister }: LoginPageProps) {
+export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [phoneNumber, setPhoneNumber] = useState('')
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [localNotice, setLocalNotice] = useState<string | null>(notice ?? null)
   const [healthStatus, setHealthStatus] = useState<HealthStatus>('idle')
-
-  useEffect(() => {
-    setLocalNotice(notice ?? null)
-  }, [notice])
 
   const checkBackendHealth = async () => {
     setHealthStatus('checking')
@@ -47,7 +40,6 @@ export function LoginPage({ onLoginSuccess, notice, onNavigateToRegister }: Logi
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
-    setLocalNotice(null)
     setIsSubmitting(true)
 
     try {
@@ -90,12 +82,6 @@ export function LoginPage({ onLoginSuccess, notice, onNavigateToRegister }: Logi
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
-          {localNotice && (
-            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">
-              {localNotice}
-            </p>
-          )}
-
           <div>
             <label htmlFor="login-phone" className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
               Phone number
@@ -105,7 +91,7 @@ export function LoginPage({ onLoginSuccess, notice, onNavigateToRegister }: Logi
               type="tel"
               autoComplete="tel"
               required
-              placeholder="+15551234567"
+              placeholder="07585585585"
               className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none ring-slate-300 placeholder:text-slate-400 focus:border-tickr-500 focus:ring-2 focus:ring-tickr-200"
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
@@ -141,15 +127,6 @@ export function LoginPage({ onLoginSuccess, notice, onNavigateToRegister }: Logi
             >
               {isSubmitting ? 'Signing in…' : 'Sign in'}
             </button>
-            {onNavigateToRegister && (
-              <button
-                type="button"
-                onClick={onNavigateToRegister}
-                className="flex flex-1 items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700"
-              >
-                Create account
-              </button>
-            )}
           </div>
 
           <div className="space-y-2">

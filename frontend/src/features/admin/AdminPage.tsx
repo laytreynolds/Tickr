@@ -1,13 +1,8 @@
 import { type FormEvent, useMemo, useState } from 'react'
 import axios from 'axios'
 import { apiClient } from '../../lib/apiClient'
-import logo from '../../assets/logo.png'
 
-interface RegisterPageProps {
-  onBackToLogin: (notice?: string) => void
-}
-
-type RegisterValidationErrors = Partial<{
+type AdminValidationErrors = Partial<{
   phoneNumber: string
   password: string
   confirmPassword: string
@@ -24,25 +19,27 @@ function getLocalTimezone(): string {
 function validatePhoneNumber(value: string): string | null {
   const trimmed = value.trim()
   if (!trimmed) return 'Phone number is required.'
-  if (trimmed.includes('@')) return 'Email registration is not supported yet. Use a phone number.'
+  if (trimmed.includes('@')) return 'Email is not supported. Use a phone number.'
   return null
 }
 
-export function RegisterPage({ onBackToLogin }: RegisterPageProps) {
+export function AdminPage() {
   const [phoneNumber, setPhoneNumber] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [fieldErrors, setFieldErrors] = useState<RegisterValidationErrors>({})
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<AdminValidationErrors>({})
 
   const timezone = useMemo(() => getLocalTimezone(), [])
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
+    setSuccessMessage(null)
 
-    const nextFieldErrors: RegisterValidationErrors = {}
+    const nextFieldErrors: AdminValidationErrors = {}
     const phoneNumberError = validatePhoneNumber(phoneNumber)
     if (phoneNumberError) nextFieldErrors.phoneNumber = phoneNumberError
 
@@ -59,28 +56,29 @@ export function RegisterPage({ onBackToLogin }: RegisterPageProps) {
 
     setIsSubmitting(true)
     try {
-      // Backend currently supports creating users by phone number + timezone + password.
       await apiClient.post('/api/v1/user/adduser', {
         phoneNumber: phoneNumber.trim(),
         timezone,
         password,
       })
 
+      setPhoneNumber('')
       setPassword('')
       setConfirmPassword('')
-      onBackToLogin('Account created. Please sign in.')
+      setSuccessMessage('User created.')
     } catch (err: unknown) {
-      let message = 'Could not create your account. Please try again.'
+      let message = 'Could not create user. Please try again.'
       if (axios.isAxiosError(err)) {
         const status = err.response?.status
-        if (status === 409) message = 'An account with that phone number already exists.'
-        else if (status === 400) message = 'Please check your details and try again.'
-        else if (status && status >= 500) message = 'Server error. Please try again in a moment.'
+        if (status === 409) message = 'A user with that phone number already exists.'
+        else if (status === 401) message = 'Session expired. Please sign in again.'
+        else if (status === 400) message = 'Please check the details and try again.'
+        else if (status != null && status >= 500) message = 'Server error. Please try again in a moment.'
       }
 
       setError(message)
       if (import.meta.env.DEV) {
-        console.error('Registration failed', err)
+        console.error('Create user failed', err)
       }
     } finally {
       setIsSubmitting(false)
@@ -88,39 +86,55 @@ export function RegisterPage({ onBackToLogin }: RegisterPageProps) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-6 flex items-center gap-3">
-          <img src={logo} alt="Tickr" className="h-12 w-12 rounded-lg object-contain" />
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight text-slate-900">Tickr</h1>
-            <p className="text-xs text-slate-500">Create an account to manage reminders.</p>
-          </div>
+    <div className="flex flex-1 flex-col gap-6">
+      <header className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Admin
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Create user accounts. Only logged-in users can access this page.
+          </p>
         </div>
+      </header>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+      {successMessage && (
+        <div
+          role="status"
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+        >
+          {successMessage}
+        </div>
+      )}
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">
+          Create user
+        </h2>
+
+        <form className="space-y-4 max-w-md" onSubmit={handleSubmit}>
           <div>
             <label
-              htmlFor="register-phone"
+              htmlFor="admin-phone"
               className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500"
             >
               Phone number
             </label>
             <input
-              id="register-phone"
+              id="admin-phone"
               type="tel"
               inputMode="tel"
               autoComplete="tel"
               required
-              placeholder="+15551234567"
+              placeholder="07585585585"
               className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none ring-slate-300 placeholder:text-slate-400 focus:border-tickr-500 focus:ring-2 focus:ring-tickr-200"
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               aria-invalid={fieldErrors.phoneNumber ? 'true' : undefined}
-              aria-describedby={fieldErrors.phoneNumber ? 'register-phone-error' : undefined}
+              aria-describedby={fieldErrors.phoneNumber ? 'admin-phone-error' : undefined}
             />
             {fieldErrors.phoneNumber && (
-              <p id="register-phone-error" className="mt-1 text-sm text-red-600" role="alert">
+              <p id="admin-phone-error" className="mt-1 text-sm text-red-600" role="alert">
                 {fieldErrors.phoneNumber}
               </p>
             )}
@@ -128,13 +142,13 @@ export function RegisterPage({ onBackToLogin }: RegisterPageProps) {
 
           <div>
             <label
-              htmlFor="register-password"
+              htmlFor="admin-password"
               className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500"
             >
               Password
             </label>
             <input
-              id="register-password"
+              id="admin-password"
               type="password"
               autoComplete="new-password"
               required
@@ -142,10 +156,10 @@ export function RegisterPage({ onBackToLogin }: RegisterPageProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               aria-invalid={fieldErrors.password ? 'true' : undefined}
-              aria-describedby={fieldErrors.password ? 'register-password-error' : undefined}
+              aria-describedby={fieldErrors.password ? 'admin-password-error' : undefined}
             />
             {fieldErrors.password && (
-              <p id="register-password-error" className="mt-1 text-sm text-red-600" role="alert">
+              <p id="admin-password-error" className="mt-1 text-sm text-red-600" role="alert">
                 {fieldErrors.password}
               </p>
             )}
@@ -153,13 +167,13 @@ export function RegisterPage({ onBackToLogin }: RegisterPageProps) {
 
           <div>
             <label
-              htmlFor="register-confirm-password"
+              htmlFor="admin-confirm-password"
               className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500"
             >
               Confirm password
             </label>
             <input
-              id="register-confirm-password"
+              id="admin-confirm-password"
               type="password"
               autoComplete="new-password"
               required
@@ -167,11 +181,11 @@ export function RegisterPage({ onBackToLogin }: RegisterPageProps) {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               aria-invalid={fieldErrors.confirmPassword ? 'true' : undefined}
-              aria-describedby={fieldErrors.confirmPassword ? 'register-confirm-password-error' : undefined}
+              aria-describedby={fieldErrors.confirmPassword ? 'admin-confirm-password-error' : undefined}
             />
             {fieldErrors.confirmPassword && (
               <p
-                id="register-confirm-password-error"
+                id="admin-confirm-password-error"
                 className="mt-1 text-sm text-red-600"
                 role="alert"
               >
@@ -179,6 +193,10 @@ export function RegisterPage({ onBackToLogin }: RegisterPageProps) {
               </p>
             )}
           </div>
+
+          <p className="text-xs text-slate-500">
+            Timezone: {timezone}
+          </p>
 
           {error && (
             <p className="text-sm text-red-600" role="alert">
@@ -189,24 +207,12 @@ export function RegisterPage({ onBackToLogin }: RegisterPageProps) {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex w-full items-center justify-center rounded-lg bg-tickr-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-tickr-700 disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex items-center justify-center rounded-lg border border-tickr-500 bg-tickr-500 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-tickr-600 disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tickr-500 focus-visible:ring-offset-2"
           >
-            {isSubmitting ? 'Creating account…' : 'Create account'}
+            {isSubmitting ? 'Creating…' : 'Create user'}
           </button>
-
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] text-slate-400">Timezone: {timezone}</p>
-            <button
-              type="button"
-              onClick={() => onBackToLogin()}
-              className="text-xs font-medium text-tickr-700 hover:text-tickr-800"
-            >
-              Back to sign in
-            </button>
-          </div>
         </form>
-      </div>
+      </section>
     </div>
   )
 }
-
