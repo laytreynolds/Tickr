@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { apiClient, setAuthToken } from '../../lib/apiClient'
 import logo from '../../assets/logo.png'
 import { ThemeToggle } from '../../components/ThemeToggle'
@@ -13,7 +13,7 @@ interface LoginPageProps {
   onLoginSuccess: (auth: AuthResponse) => void
 }
 
-type HealthStatus = 'idle' | 'checking' | 'ok' | 'error'
+type HealthStatus = 'idle'| 'checking' | 'up' | 'down'
 
 export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [phoneNumber, setPhoneNumber] = useState('')
@@ -21,21 +21,40 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [healthStatus, setHealthStatus] = useState<HealthStatus>('idle')
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
+
+  useEffect(() => {
+    if (!snackbarOpen) return
+    const t = setTimeout(() => setSnackbarOpen(false), 4000)
+    return () => clearTimeout(t)
+  }, [snackbarOpen])
 
   const checkBackendHealth = async () => {
     setHealthStatus('checking')
     try {
       const { data } = await apiClient.get<string>('/api/v1/ping')
       if (data === 'pong') {
-        setHealthStatus('ok')
+        setHealthStatus('up');
+        setSnackbarMessage('Backend is up');
+        setSnackbarSeverity('success');
+        setSnackbarOpen(true);
+        setTimeout(() => setHealthStatus('idle'), 4000);
       } else {
-        setHealthStatus('error')
+        setHealthStatus('down');
+        setSnackbarMessage('Backend is down');
+        setSnackbarSeverity('error');
+        setSnackbarOpen(true);
+        setTimeout(() => setHealthStatus('idle'), 4000);
       }
     } catch {
-      setHealthStatus('error')
+      setHealthStatus('down');
+      setSnackbarMessage('Backend is down');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+      setTimeout(() => setHealthStatus('idle'), 4000);
     }
-    // Reset status after a few seconds so user can try again
-    setTimeout(() => setHealthStatus('idle'), 4000)
   }
 
   const handleSubmit = async (event: FormEvent) => {
@@ -69,9 +88,67 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-slate-50 px-4 dark:bg-slate-900">
-      <div className="absolute right-4 top-4">
+      <div className="absolute right-4 top-4 flex items-center gap-3">
         <ThemeToggle />
+        <button
+          type="button"
+          onClick={checkBackendHealth}
+          disabled={healthStatus === 'checking'}
+          aria-label="Check backend health"
+          className={[
+            'inline-flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-70 dark:bg-slate-800',
+            healthStatus === 'up' &&
+              'border-emerald-500 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400',
+            healthStatus === 'down' &&
+              'border-red-500 text-red-600 dark:border-red-400 dark:text-red-400',
+            (healthStatus === 'idle' || healthStatus === 'checking') &&
+              'border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {healthStatus === 'checking' && (
+            <svg
+              className="h-4 w-4 animate-spin"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              aria-hidden
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+          )}
+          {healthStatus === 'idle' && 'Check backend health'}
+          {healthStatus === 'checking' && 'Checking...'}
+          {healthStatus === 'up' && 'Backend up'}
+          {healthStatus === 'down' && 'Backend down'}
+        </button>
       </div>
+
+      {snackbarOpen && (
+        <div
+          role="alert"
+          className={`fixed left-1/2 top-4 z-50 w-full max-w-sm -translate-x-1/2 rounded-lg px-4 py-3 shadow-lg ${
+            snackbarSeverity === 'success'
+              ? 'bg-emerald-600 text-white dark:bg-emerald-500'
+              : 'bg-red-600 text-white dark:bg-red-500'
+          }`}
+        >
+          {snackbarMessage}
+        </div>
+      )}
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-600 dark:bg-slate-800">
         <div className="mb-6 flex items-center gap-3">
           <img src={logo} alt="Tickr" className="h-12 w-12 rounded-lg object-contain" />
@@ -133,32 +210,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             </button>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex flex-col items-center gap-1">
-              <button
-                type="button"
-                onClick={checkBackendHealth}
-                disabled={healthStatus === 'checking'}
-                className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
-                aria-label="Check backend health"
-              >
-                {healthStatus === 'checking' ? 'Checking…' : 'Check backend health'}
-              </button>
-              {healthStatus === 'ok' && (
-                <p className="text-xs text-emerald-600" role="status">
-                  Backend is reachable.
-                </p>
-              )}
-              {healthStatus === 'error' && (
-                <p className="text-xs text-red-600" role="alert">
-                  Backend unreachable.
-                </p>
-              )}
-            </div>
-            <p className="text-center text-[11px] text-slate-400">
-              Use the phone number and password configured in your Tickr backend.
-            </p>
-          </div>
+          <p className="text-center text-[11px] text-slate-400">
+            Use the phone number and password configured in your Tickr backend.
+          </p>
         </form>
       </div>
     </div>
