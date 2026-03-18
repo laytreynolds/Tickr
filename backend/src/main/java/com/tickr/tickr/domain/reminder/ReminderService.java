@@ -5,7 +5,6 @@ import com.tickr.tickr.domain.event.EventUser;
 import com.tickr.tickr.domain.notification.Notification;
 import com.tickr.tickr.domain.notification.NotificationService;
 import com.tickr.tickr.domain.user.User;
-import com.tickr.tickr.domain.user.UserRepository;
 import com.tickr.tickr.notification.NotificationDispatcher;
 import com.tickr.tickr.domain.reminder.ReminderChannel;
 
@@ -32,7 +31,6 @@ public class ReminderService {
     private final NotificationService notificationService;
     private final NotificationDispatcher notificationDispatcher;
     private final ReminderDeliveryRepository reminderDeliveryRepository;
-    private final UserRepository userRepository;
 
     public List<Reminder> getReminders() {
         return reminderRepository.findAll();
@@ -96,7 +94,7 @@ public class ReminderService {
             }
         }
 
-        log.info("Processed {} reminder(s): {} successful, {} failed",
+        log.debug("Processed {} reminder(s): {} successful, {} failed",
                 reminders.size(), successCount, failureCount);
     }
 
@@ -159,7 +157,7 @@ public class ReminderService {
             // Batch save all reminders
             if (!reminders.isEmpty()) {
                 reminderRepository.saveAll(reminders);
-                log.info("Successfully created {} reminder(s) for event {} ({} users, {} timestamps)",
+                log.debug("Successfully created {} reminder(s) for event {} ({} users, {} timestamps)",
                         reminders.size(), event.getTitle(), usersToNotify.size(), reminderTimestamps.size());
             }
         } catch (Exception e) {
@@ -222,8 +220,8 @@ public class ReminderService {
 
         Instant now = Instant.now();
 
-        // "All users" plus explicit event participants.
-        Set<User> usersToNotify = new HashSet<>(userRepository.findAll());
+        // Event owner and explicit event participants.
+        Set<User> usersToNotify = new HashSet<>();
         usersToNotify.add(event.getOwner());
         if (event.getAssignedUsers() != null) {
             for (EventUser eventUser : event.getAssignedUsers()) {
@@ -269,7 +267,7 @@ public class ReminderService {
             }
         }
 
-        log.info("Remind-now processed for event {}: {} sent, {} failed ({} channel(s))",
+        log.debug("Remind-now processed for event {}: {} sent, {} failed ({} channel(s))",
                 event.getId(), successCount, failureCount, selectedChannels.size());
     }
 
